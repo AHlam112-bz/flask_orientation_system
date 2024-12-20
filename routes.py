@@ -239,42 +239,76 @@ def get_student_scores(student_id):
 
 
 @app.route('/student/report/score', methods=['POST'])
-def auto_generate_report():
+def report_score():
     if 'student_id' not in session:
-        return jsonify({"message": "Please log in to report an issue"}), 401
+        return jsonify({'message': 'Please log in to report an issue'}), 401
+    data = request.json
+    field_name = data.get('field_name')
+    if not field_name:
+        return jsonify({'message': 'Field name is required'}), 400
 
+    # Check if score exists for the student
     student = Student.query.get(session['student_id'])
     if not student:
-        return jsonify({"message": "Student not found"}), 404
+        return jsonify({'message': 'Student not found'}), 404
 
-    data = request.get_json()
-    field_name = data.get('field_name')
-
-    if not field_name:
-        return jsonify({"message": "Field name is required"}), 400
-
-    # Auto-generate a report message
-    report_message = (
-        f"Student '{student.name}' (ID: {student.id}) has reported an issue with the "
-        f"'{field_name}' score. Please verify and correct it if necessary."
-    )
-
-    # Create the report entry in the database
-    new_report = Report(
+    # Create a new report
+    report = Report(
         student_id=student.id,
-        report_type=f"Score Issue - {field_name.capitalize()}",
-        description=report_message
+        field_name=field_name,
+        issue_description=f"The student has reported an issue with the {field_name} score.",
+        status='Pending'
     )
-
-
-    db.session.add(new_report)
+    db.session.add(report)
     db.session.commit()
 
-    return jsonify({
-        "message": "Your report has been submitted successfully",
-        "report_id": new_report.id,
-        "generated_message": report_message
-    }), 201
+    return jsonify({'message': 'Report submitted successfully'}), 201
+
+from datetime import datetime
+
+@app.route('/admin/reports', methods=['GET'])
+def get_reports():
+    reports = Report.query.all()  # Assuming you're fetching reports
+    reports_data = []
+
+    for report in reports:
+        report_data = {
+            'id': report.id,
+            'field_name': report.field_name,
+            'issue_description': report.issue_description,
+            'status': report.status,
+            'created_at': report.created_at.strftime('%Y-%m-%dT%H:%M:%S')  # Convert datetime to string
+        }
+        reports_data.append(report_data)
+
+    return jsonify(reports_data)
+
+@app.route('/admin/report/update/<int:report_id>', methods=['POST'])
+@required_admin
+def update_report(report_id):
+    report = Report.query.get(report_id)
+    if not report:
+        return jsonify({"message": "Report not found"}), 404
+
+    data = request.get_json()
+    new_score = data.get('new_score')
+    if new_score is None:
+        return jsonify({"message": "New score is required"}), 400
+
+    # Update the report with the new score and set status to 'Resolved'
+    report.new_score = new_score
+    report.status = 'Resolved'
+    db.session.commit()
+
+    # Update the corresponding score for the student in the Score table
+    score = Score.query.filter_by(student_id=report.student_id).first()
+    if score:
+        setattr(score, report.field_name + "_score", new_score)  # Dynamically update the correct field
+        db.session.commit()
+
+    return jsonify({"message": "Report resolved and score updated successfully"}), 200
+
+
 
 @app.route('/debug/session', methods=['GET'])
 def debug_session():

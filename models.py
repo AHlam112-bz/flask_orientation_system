@@ -83,11 +83,14 @@ admins_schema=AdminSchema(many=True)
 class Report(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=False)
-    report_type = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=False)
+    field_name = db.Column(db.String(50), nullable=False)
+    issue_description = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(50), default='Pending')  # Could be 'Pending', 'Resolved', etc.
+    new_score = db.Column(db.Float)  # Store the updated score if available
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    student = db.relationship('Student', backref='reports')
+    student = db.relationship('Student', backref=db.backref('reports', lazy=True))
+
 
 
 with app.app_context():
