@@ -1,7 +1,7 @@
 from main import db,app,ma
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.dialects.sqlite import JSON
-
+from datetime import datetime
  # Score Model
 class Score(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -77,6 +77,18 @@ class AdminSchema(ma.SQLAlchemyAutoSchema):
 
 admin_schema=AdminSchema()
 admins_schema=AdminSchema(many=True)
+
+
+
+class Report(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=False)
+    report_type = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    student = db.relationship('Student', backref='reports')
+
 
 with app.app_context():
     db.create_all()

@@ -1,7 +1,7 @@
 from flask import request ,jsonify,session
 import json
 from main import db,app
-from models import Student,admin,student_schema,admin_schema,students_schema,admins_schema,Score,score_schema
+from models import Student,admin,student_schema,admin_schema,students_schema,admins_schema,Score,score_schema,Report
 from functools import wraps
 from flask_session import Session
 import numpy as np
@@ -110,12 +110,12 @@ def login_student():
 
     student = Student.query.filter_by(email=email).first()
 
-
     if student:
-        session['student_id'] = student.id
+        session['student_id'] = student.id  # Store student_id in session
         return jsonify({'message': 'Login successful!'}), 200
     else:
         return jsonify({'message': 'Invalid credentials'}), 401
+
     
 @app.route('/student/logout',methods=['POST'])
 def logout_student():
@@ -225,46 +225,66 @@ def get_student_scores(student_id):
     if not scores:
         return jsonify({"message": "No scores available for this student"}), 404
 
-    base_report_message = "Report issue: The {field_name} score is incorrect for student ID {student_id}."
-
     return jsonify({
         "student_name": student.name,
-        "math_score": {
-            "value": scores.math_score,
-            "report": base_report_message.format(field_name="math", student_id=student_id)
-        },
-        "history_score": {
-            "value": scores.history_score,
-            "report": base_report_message.format(field_name="history", student_id=student_id)
-        },
-        "physics_score": {
-            "value": scores.physics_score,
-            "report": base_report_message.format(field_name="physics", student_id=student_id)
-        },
-        "chemistry_score": {
-            "value": scores.chemistry_score,
-            "report": base_report_message.format(field_name="chemistry", student_id=student_id)
-        },
-        "biology_score": {
-            "value": scores.biology_score,
-            "report": base_report_message.format(field_name="biology", student_id=student_id)
-        },
-        "english_score": {
-            "value": scores.english_score,
-            "report": base_report_message.format(field_name="english", student_id=student_id)
-        },
-        "geography_score": {
-            "value": scores.geography_score,
-            "report": base_report_message.format(field_name="geography", student_id=student_id)
-        },
-        "weekly_self_study_hours": scores.weekly_self_study_hours,
-        "recommendation": scores.recommendation
+        "math_score": scores.math_score,
+        "history_score": scores.history_score,
+        "physics_score": scores.physics_score,
+        "chemistry_score": scores.chemistry_score,
+        "biology_score": scores.biology_score,
+        "english_score": scores.english_score,
+        "geography_score": scores.geography_score,
+        "recommendation": scores.recommendation 
     }), 200
 
 
+@app.route('/student/report/score', methods=['POST'])
+def auto_generate_report():
+    if 'student_id' not in session:
+        return jsonify({"message": "Please log in to report an issue"}), 401
+
+    student = Student.query.get(session['student_id'])
+    if not student:
+        return jsonify({"message": "Student not found"}), 404
+
+    data = request.get_json()
+    field_name = data.get('field_name')
+
+    if not field_name:
+        return jsonify({"message": "Field name is required"}), 400
+
+    # Auto-generate a report message
+    report_message = (
+        f"Student '{student.name}' (ID: {student.id}) has reported an issue with the "
+        f"'{field_name}' score. Please verify and correct it if necessary."
+    )
+
+    # Create the report entry in the database
+    new_report = Report(
+        student_id=student.id,
+        report_type=f"Score Issue - {field_name.capitalize()}",
+        description=report_message
+    )
 
 
+    db.session.add(new_report)
+    db.session.commit()
 
+    return jsonify({
+        "message": "Your report has been submitted successfully",
+        "report_id": new_report.id,
+        "generated_message": report_message
+    }), 201
+
+@app.route('/debug/session', methods=['GET'])
+def debug_session():
+    student_id = session.get('student_id')
+    return jsonify({
+        "student_id": student_id,
+        "message": "Session data retrieved successfully" if student_id else "No active session"
+    })
+
+  
 
 if __name__=="__main__":
     app.run(debug=True)
