@@ -5,6 +5,8 @@ import json
 import numpy as np
 import os
 from datetime import timedelta
+
+from flask_cors import CORS
 app=Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -24,9 +26,10 @@ class CustomJSONEncoder(json.JSONEncoder):
         return super(CustomJSONEncoder, self).default(obj)
 
 app.json_encoder = CustomJSONEncoder
- 
+CORS(app)
 db=SQLAlchemy(app)
 ma=Marshmallow(app)
+
 
 
 

@@ -6,9 +6,11 @@ from functools import wraps
 from flask_session import Session
 import numpy as np
 import pickle
+
+
 Session(app)
-scaler = pickle.load(open("./scaler1.pkl", 'rb'))
-model = pickle.load(open("./model1.pkl", 'rb'))
+scaler = pickle.load(open("./scaler.pkl", 'rb'))
+model = pickle.load(open("./model.pkl", 'rb'))
 
 def required_admin(f):
     @wraps(f)
@@ -19,27 +21,74 @@ def required_admin(f):
         return f(*args,**kwargs)
     return decorator
 
-@app.route('/student/add',methods=['POST'])
+@app.route('/student/add', methods=['POST'])
 @required_admin
 def add_student():
-    name=request.json['name']
-    email=request.json['email']
-    apogee=request.json['apogee']
-    gender=request.json['gender']
-    if not all([name,email,apogee,gender]):
-        return jsonify({'message':'all fields are required'}),400
-    if Student.query.filter_by(email=email).first() or Student.query.filter_by(apogee=apogee).first():
-        return jsonify({'message':'email or apogee already exists!!!!!'}),400
-    new_student=Student(name=name,email=email,apogee=apogee,gender=gender)
-    db.session.add(new_student)
-    db.session.commit() 
-    return student_schema.jsonify(new_student)
+    name = request.json.get('name')
+    gender = request.json.get('gender')
 
-@app.route('/',methods=['GET'])
-def get_student():
-    all_students=Student.query.all()
-    result = students_schema.dump(all_students)
-    return jsonify(result)
+    if not all([name, gender]):
+        return jsonify({'message': 'Name and gender are required'}), 400
+
+    try:
+        # Generate the apogee number
+        last_student = Student.query.order_by(Student.apogee.desc()).first()
+        apogee = last_student.apogee + 1 if last_student else 1001  # Start from 1001 if no students exist
+        apogee_suffix = f"{apogee % 100:02}"
+        # Generate the email based on the name and apogee
+        email = f"{name.lower().replace(' ', '.')}.{apogee_suffix}@edu.uiz.ac.ma"
+
+        # Check if email already exists (unlikely, but for safety)
+        if Student.query.filter_by(email=email).first():
+            return jsonify({'message': 'Generated email already exists, please modify the student name.'}), 400
+        apogee_part=str(apogee)
+        password=f"{name.lower().replace(' ', '')}.{apogee_part}"
+        # Create a new student
+        new_student = Student(name=name, email=email, apogee=apogee, gender=gender,password=password)
+        db.session.add(new_student)
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Student added successfully!',
+            'student': {
+                'id': new_student.id,
+                'name': new_student.name,
+                'email': new_student.email,
+                'apogee': new_student.apogee,
+                'gender': new_student.gender,
+                'password':new_student.password
+            }
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error occurred: {str(e)}'}), 500
+
+
+@app.route('/', methods=['GET'])
+def get_students():
+    all_students = Student.query.all()
+    result = []
+
+    for student in all_students:
+       
+        score = student.scores
+        absence_days = score.absence_days if score and score.absence_days is not None else 0
+        recommendation = score.recommendation if score and score.recommendation else "No departement available"
+
+        result.append({
+            "id": student.id,
+            "name": student.name,
+            "email": student.email,
+            "apogee": student.apogee,
+            "gender": student.gender,
+            "password":student.password,
+            "absence_days": absence_days,
+            "departement": recommendation,
+        })
+
+    return jsonify(result), 200
+
 
 @app.route('/check_session', methods=['GET'])
 def check_session():
@@ -70,43 +119,76 @@ def logout_admin():
         return jsonify({'message':'you logged out seccessfully  !!'})
     else:
         return jsonify({'message':'no admin is logged in !!'})
-        
-    
-@app.route("/delete/<id>",methods=['DELETE'])
-def delete (id):
-    if 'admin_id' not in session:
-        student_delete=Student.query.get(id)
-        if not student_delete:
-            return jsonify({'message':'student not found'})
-        db.session.delete(student_delete)
+
+def renumber_student_ids():
+    try:
+        # Fetch all students ordered by their current ID
+        students = Student.query.order_by(Student.id).all()
+        new_id = 1
+        for student in students:
+            student.id = new_id
+            new_id += 1
+
         db.session.commit()
-        return jsonify({'message':'student deleted!!!'})
-    else:
-        return jsonify({'message':'u have to login!!'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error during renumbering: {e}")
+
+
+@app.route("/delete/<int:id>", methods=["DELETE"])
+def delete_student(id):
+    if 'admin_id' not in session:
+        return jsonify({'message': 'You have to login as admin!'}), 401
+
+    try:
+        student_to_delete = Student.query.get(id)
+        if not student_to_delete:
+            return jsonify({'message': 'Student not found'}), 404
+
+        # Manually delete associated reports and scores
+        Report.query.filter_by(student_id=id).delete()
+        Score.query.filter_by(student_id=id).delete()
+
+        # Delete the student
+        db.session.delete(student_to_delete)
+        db.session.commit()
+
+        # Renumber IDs
+        renumber_student_ids()
+
+        return jsonify({'message': 'Student and associated data deleted successfully! IDs renumbered.'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error occurred: {str(e)}'}), 500
+
+
+
+
+
     
-@app.route('/student/registration',methods=["POST"])
-def student_registratin():
-    name=request.json['name']
-    email=request.json['email']
-    apogee=request.json['apogee']
-    gender=request.json['gender']
-    if not all( [name,email,apogee,gender]):
-        return jsonify({'message':'all fields are required!!'})
-    if Student.query.filter_by(email=email).first() or Student.query.filter_by(apogee=apogee).first() :
-        return jsonify({'message':'u already have an account !!'})
-    new_student = Student(name=name, email=email,apogee=apogee,gender=gender)
-    db.session.add(new_student)
-    db.session.commit()
-    return jsonify({'message': 'Student registered successfully!'}), 201
+#@app.route('/student/registration',methods=["POST"])
+#def student_registratin():
+ #   name=request.json['name']
+ #   email=request.json['email']
+#    apogee=request.json['apogee']
+ #   gender=request.json['gender']
+ #   if not all( [name,email,apogee,gender]):
+ #       return jsonify({'message':'all fields are required!!'})
+ #   if Student.query.filter_by(email=email).first() or Student.query.filter_by(apogee=apogee).first() :
+  #      return jsonify({'message':'u already have an account !!'})
+   # new_student = Student(name=name, email=email,apogee=apogee,gender=gender)
+    #db.session.add(new_student)
+    #db.session.commit()
+    #return jsonify({'message': 'Student registered successfully!'}), 201
 
 @app.route('/student/login', methods=['POST'])
 def login_student():
     data = request.json
     email = data.get('email')
-    apogee = data.get('apogee')
+    password = data.get('password')
 
-    if not all([email, apogee]):
-        return jsonify({'message': 'Email and apogee are required'}), 400
+    if not all([email, password]):
+        return jsonify({'message': 'Email and password are required'}), 400
 
     student = Student.query.filter_by(email=email).first()
 
@@ -143,48 +225,54 @@ def admin_add_score(student_id):
         biology_score = data.get('biology_score')
         english_score = data.get('english_score')
         geography_score = data.get('geography_score')
-        part_time_job = int(data.get('part_time_job', 0))
+        
         absence_days = data.get('absence_days', 0)
-        extracurricular_activities = int(data.get('extracurricular_activities', 0))
+       
         weekly_self_study_hours = data.get('weekly_self_study_hours', 0)
 
-        # Calculate total and average score
-        total_score = sum([
-            math_score, history_score, physics_score,
-            chemistry_score, biology_score, english_score, geography_score
-        ])
+        # Calculate total and average score (we'll only use this for saving in the database)
+        total_score = sum([math_score, history_score, physics_score, chemistry_score, biology_score, english_score, geography_score])
         average_score = total_score / 7
 
-        # Prepare the input for the model
+        # Prepare the input for the model (without total_score and average_score)
         input_features = np.array([[
-            1 if student.gender.lower() == 'male' else 0,
-            part_time_job,
-            absence_days,
-            extracurricular_activities,
-            weekly_self_study_hours,
-            math_score, history_score, physics_score,
-            chemistry_score, biology_score, english_score,
-            geography_score, total_score, average_score
+            absence_days,                                  # Absence days
+            weekly_self_study_hours,                       # Weekly self-study hours
+            math_score, history_score, physics_score,      # Academic scores
+            chemistry_score, biology_score, english_score, 
+            geography_score  ,total_score,   average_score                         
         ]])
-
+    # Print the input features and their shape to debug
+        print("Input Features:", input_features)
+        print("Shape of Input Features:", input_features.shape)
         # Scale the input and make a prediction
-        scaled_features = scaler.transform(input_features)
+        scaled_features = scaler.transform(input_features)  # Ensure this matches the scaler's training data
         recommendation = model.predict(scaled_features)[0]
 
         print(f"Model raw prediction: {recommendation}")
+       
+
+# Ensure recommendation is an integer
+        recommendation = int(recommendation)
+
+# Debugging
+        print(f"Model casted prediction (as int): {recommendation}")
         # Map the numeric recommendation to a descriptive text
-        career_aspiration_map = {
-            0: 'Lawyer', 1: 'Doctor', 2: 'Government Officer', 3: 'Artist', 4: 'Unknown',
-            5: 'Software Engineer', 6: 'Teacher', 7: 'Business Owner', 8: 'Scientist',
-            9: 'Banker', 10: 'Writer', 11: 'Accountant', 12: 'Designer',
-            13: 'Construction Engineer', 14: 'Game Developer', 15: 'Stock Investor',
-            16: 'Real Estate Developer'
-        }
-        recommendation_text = career_aspiration_map.get(
-            recommendation, f"Unknown Recommendation ({recommendation})"
-        )
-        
-        # Create a new Score record for the student
+        career_inspiration_map = {
+    0: 'Droit', 1: 'Médecine', 2: 'Sciences politiques', 3: 'Beaux-arts',
+    4: 'Informatique', 5: 'Non spécifié', 6: 'Éducation', 7: 'Entrepreneuriat',
+    8: 'Recherche scientifique', 9: 'Finance', 10: 'Littérature',
+    11: 'Comptabilité', 12: 'Design', 13: 'Génie civil',
+    14: 'Développement de jeux', 15: 'Économie et marchés financiers',
+    16: 'Immobilier'
+}
+        print(f"Keys in career_aspiration_map: {career_inspiration_map.keys()}")
+
+        # Map the numeric recommendation to a descriptive text
+        recommendation_text = career_inspiration_map.get(recommendation, f"Unknown Recommendation ({recommendation})")
+
+        print(f"Mapped recommendation: {recommendation_text}")
+        # Create new Score record
         new_score = Score(
             student_id=student.id,
             math_score=math_score,
@@ -196,24 +284,26 @@ def admin_add_score(student_id):
             geography_score=geography_score,
             total_score=total_score,
             average_score=average_score,
-            part_time_job=part_time_job,
             absence_days=absence_days,
-            extracurricular_activities=extracurricular_activities,
+           
             weekly_self_study_hours=weekly_self_study_hours,
             recommendation=recommendation_text
         )
 
+        # Add to the database and commit
         db.session.add(new_score)
         db.session.commit()
 
         return jsonify({
             "message": "Score and additional features added successfully",
+            "average score": average_score,
+            "total score":total_score,
             "recommendation": recommendation_text
         }), 201
 
     except TypeError as e:
         return jsonify({"error": f"Invalid data: {str(e)}"}), 400
-   
+
     
 @app.route('/student/scores/<int:student_id>', methods=['GET'])
 def get_student_scores(student_id):
@@ -295,7 +385,7 @@ def update_report(report_id):
     if new_score is None:
         return jsonify({"message": "New score is required"}), 400
 
-    # Update the report with the new score and set status to 'Resolved'
+
     report.new_score = new_score
     report.status = 'Resolved'
     db.session.commit()
@@ -307,6 +397,58 @@ def update_report(report_id):
         db.session.commit()
 
     return jsonify({"message": "Report resolved and score updated successfully"}), 200
+
+
+from datetime import date, timedelta
+
+def notify_student_about_path_and_scores():
+    students = Student.query.all()
+    for student in students:
+        # Check last notification date
+        if student.notified_on and student.notified_on >= date.today():
+            continue
+
+        # Fetch scores and check for low ones
+        score = Score.query.filter_by(student_id=student.id).first()
+        if not score:
+            continue
+
+        low_scores = {}
+        threshold = 50  # Example threshold for low scores
+        for subject, value in vars(score).items():
+            if '_score' in subject and value < threshold and not score.low_score_notified:
+                low_scores[subject] = value
+
+        # Decide notification message
+        if low_scores:
+            subject, value = low_scores.popitem()
+            notification_message = (
+                f"Your score in {subject.replace('_score', '').capitalize()} "
+                f"is {value}. Consider dedicating more time to this subject."
+            )
+            score.low_score_notified = True
+        else:
+            notification_message = (
+                f"Your recommended path is {score.recommendation}. "
+                "Explore opportunities and build skills in this area!"
+            )
+
+        # Send notification
+        print(f"Notification for {student.name}: {notification_message}")
+        try:
+            email_message = Message(
+                f"Notification for {student.name}",
+                recipients=[student.email],
+                body=f"Hello {student.name},\n\n{notification_message}\n\nBest regards,\nYour Team"
+            )
+            mail.send(email_message)
+        except Exception as e:
+            print(f"Failed to send email to {student.email}: {e}")
+            continue
+
+        # Update notification date
+        student.notified_on = date.today()
+        db.session.commit()
 
 
 
@@ -321,4 +463,5 @@ def debug_session():
   
 
 if __name__=="__main__":
-    app.run(debug=True)
+    app.run(host='0.0.0.0',port=5000)
+    app.config['DEBUG'] = True

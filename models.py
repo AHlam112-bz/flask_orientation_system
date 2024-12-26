@@ -20,15 +20,28 @@ class Score(db.Model):
     total_score = db.Column(db.Float, nullable=True)
     average_score = db.Column(db.Float, nullable=True)
     
-    # Additional Features
-    gender = db.Column(db.String(10), nullable=True)  # Optional if not tied to each score
-    part_time_job = db.Column(db.Boolean, nullable=True)
+    
     absence_days = db.Column(db.Integer, nullable=True)
-    extracurricular_activities = db.Column(db.Boolean, nullable=True)
+   
     weekly_self_study_hours = db.Column(db.Float, nullable=True)
     
     # ML Model Recommendation
     recommendation = db.Column(db.String(255), nullable=True)
+    low_score_notified = db.Column(db.Boolean, default=False)
+
+
+class Report(db.Model):
+    id = db.Column(db.Integer, primary_key=True) 
+    student_id = db.Column(db.Integer, db.ForeignKey('student.id', ondelete="CASCADE"), nullable=False)
+    field_name = db.Column(db.String(50), nullable=False)
+    issue_description = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(50), default='Pending')  
+    new_score = db.Column(db.Float)  
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    student = db.relationship('Student', backref=db.backref('reports', lazy=True))
+
+
 
 class Student(db.Model):
     id=db.Column(db.Integer,primary_key=True)
@@ -36,14 +49,15 @@ class Student(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     apogee=db.Column(db.Integer,unique=True,nullable=False)
     gender = db.Column(db.String(10), nullable=True)
-    
-    
+    password=db.Column(db.String(30),unique=True, nullable=False)
     scores = db.relationship('Score', backref='student', uselist=False, cascade="all, delete-orphan")
-    def __init__(self,name,email,apogee,gender):
+    notified_on = db.Column(db.Date, nullable=True)
+    def __init__(self,name,email,apogee,gender,password):
         self.name=name
         self.email=email
         self.apogee=apogee
         self.gender=gender
+        self.password=password
 
 class StudentSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
@@ -57,6 +71,9 @@ students_schema = StudentSchema(many=True)
 class ScoreSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = Score
+        
+
+    
 
 score_schema = ScoreSchema()
 scores_schema = ScoreSchema(many=True)
@@ -77,19 +94,6 @@ class AdminSchema(ma.SQLAlchemyAutoSchema):
 
 admin_schema=AdminSchema()
 admins_schema=AdminSchema(many=True)
-
-
-
-class Report(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=False)
-    field_name = db.Column(db.String(50), nullable=False)
-    issue_description = db.Column(db.String(255), nullable=False)
-    status = db.Column(db.String(50), default='Pending')  # Could be 'Pending', 'Resolved', etc.
-    new_score = db.Column(db.Float)  # Store the updated score if available
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    student = db.relationship('Student', backref=db.backref('reports', lazy=True))
 
 
 
