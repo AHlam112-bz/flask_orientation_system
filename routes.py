@@ -399,55 +399,6 @@ def update_report(report_id):
     return jsonify({"message": "Report resolved and score updated successfully"}), 200
 
 
-import firebase_admin
-from firebase_admin import credentials, messaging
-
-# Initialize Firebase
-cred = credentials.Certificate("firebase-adminsdk.json")
-firebase_admin.initialize_app(cred)
-
-def send_fcm_notification(token, title, message):
-    try:
-        # Create a message
-        notification = messaging.Message(
-            notification=messaging.Notification(
-                title=title,
-                body=message
-            ),
-            token=token
-        )
-        # Send the message
-        response = messaging.send(notification)
-        print(f"Successfully sent notification: {response}")
-    except Exception as e:
-        print(f"Error sending notification: {e}")
-@app.route('/student/update_token', methods=['POST'])
-def update_fcm_token():
-    data = request.json
-    student_id = data.get('student_id')
-    fcm_token = data.get('fcm_token')
-
-    student = Student.query.get(student_id)
-    if not student:
-        return jsonify({'message': 'Student not found'}), 404
-
-    student.fcm_token = fcm_token
-    db.session.commit()
-    return jsonify({'message': 'FCM token updated successfully'}), 200
-def notify_student_about_path_and_scores():
-    students = Student.query.all()
-    for student in students:
-        if not student.fcm_token:
-            continue  # Skip students without FCM tokens
-
-        # Check for notifications (recommendation or low scores)
-        # Example message
-        notification_title = "Your Academic Path Update"
-        notification_body = f"Your recommended path is Marketing. Explore resources today!"
-
-        # Send FCM notification
-        send_fcm_notification(student.fcm_token, notification_title, notification_body)
-
 
 
 @app.route('/debug/session', methods=['GET'])

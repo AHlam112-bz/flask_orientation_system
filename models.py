@@ -27,7 +27,7 @@ class Score(db.Model):
     
     # ML Model Recommendation
     recommendation = db.Column(db.String(255), nullable=True)
-    fcm_token = db.Column(db.String(255), nullable=True) 
+  
 
 
 class Report(db.Model):
@@ -51,7 +51,7 @@ class Student(db.Model):
     gender = db.Column(db.String(10), nullable=True)
     password=db.Column(db.String(30),unique=True, nullable=False)
     scores = db.relationship('Score', backref='student', uselist=False, cascade="all, delete-orphan")
-    notified_on = db.Column(db.Date, nullable=True)
+    
     def __init__(self,name,email,apogee,gender,password):
         self.name=name
         self.email=email
