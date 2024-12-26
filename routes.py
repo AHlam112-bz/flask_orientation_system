@@ -399,56 +399,54 @@ def update_report(report_id):
     return jsonify({"message": "Report resolved and score updated successfully"}), 200
 
 
-from datetime import date, timedelta
+import firebase_admin
+from firebase_admin import credentials, messaging
 
+# Initialize Firebase
+cred = credentials.Certificate("firebase-adminsdk.json")
+firebase_admin.initialize_app(cred)
+
+def send_fcm_notification(token, title, message):
+    try:
+        # Create a message
+        notification = messaging.Message(
+            notification=messaging.Notification(
+                title=title,
+                body=message
+            ),
+            token=token
+        )
+        # Send the message
+        response = messaging.send(notification)
+        print(f"Successfully sent notification: {response}")
+    except Exception as e:
+        print(f"Error sending notification: {e}")
+@app.route('/student/update_token', methods=['POST'])
+def update_fcm_token():
+    data = request.json
+    student_id = data.get('student_id')
+    fcm_token = data.get('fcm_token')
+
+    student = Student.query.get(student_id)
+    if not student:
+        return jsonify({'message': 'Student not found'}), 404
+
+    student.fcm_token = fcm_token
+    db.session.commit()
+    return jsonify({'message': 'FCM token updated successfully'}), 200
 def notify_student_about_path_and_scores():
     students = Student.query.all()
     for student in students:
-        # Check last notification date
-        if student.notified_on and student.notified_on >= date.today():
-            continue
+        if not student.fcm_token:
+            continue  # Skip students without FCM tokens
 
-        # Fetch scores and check for low ones
-        score = Score.query.filter_by(student_id=student.id).first()
-        if not score:
-            continue
+        # Check for notifications (recommendation or low scores)
+        # Example message
+        notification_title = "Your Academic Path Update"
+        notification_body = f"Your recommended path is Marketing. Explore resources today!"
 
-        low_scores = {}
-        threshold = 50  # Example threshold for low scores
-        for subject, value in vars(score).items():
-            if '_score' in subject and value < threshold and not score.low_score_notified:
-                low_scores[subject] = value
-
-        # Decide notification message
-        if low_scores:
-            subject, value = low_scores.popitem()
-            notification_message = (
-                f"Your score in {subject.replace('_score', '').capitalize()} "
-                f"is {value}. Consider dedicating more time to this subject."
-            )
-            score.low_score_notified = True
-        else:
-            notification_message = (
-                f"Your recommended path is {score.recommendation}. "
-                "Explore opportunities and build skills in this area!"
-            )
-
-        # Send notification
-        print(f"Notification for {student.name}: {notification_message}")
-        try:
-            email_message = Message(
-                f"Notification for {student.name}",
-                recipients=[student.email],
-                body=f"Hello {student.name},\n\n{notification_message}\n\nBest regards,\nYour Team"
-            )
-            mail.send(email_message)
-        except Exception as e:
-            print(f"Failed to send email to {student.email}: {e}")
-            continue
-
-        # Update notification date
-        student.notified_on = date.today()
-        db.session.commit()
+        # Send FCM notification
+        send_fcm_notification(student.fcm_token, notification_title, notification_body)
 
 
 

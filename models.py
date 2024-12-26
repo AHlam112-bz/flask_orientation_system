@@ -27,7 +27,7 @@ class Score(db.Model):
     
     # ML Model Recommendation
     recommendation = db.Column(db.String(255), nullable=True)
-    low_score_notified = db.Column(db.Boolean, default=False)
+    fcm_token = db.Column(db.String(255), nullable=True) 
 
 
 class Report(db.Model):
