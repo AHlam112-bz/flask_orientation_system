@@ -1,16 +1,18 @@
 from flask import request ,jsonify,session
 import json
 from main import db,app
-from models import Student,admin,student_schema,admin_schema,students_schema,admins_schema,Score,score_schema,Report
+from models import Student,admin,student_schema,admin_schema,students_schema,admins_schema,Score,score_schema,Report,Notification
 from functools import wraps
 from flask_session import Session
 import numpy as np
 import pickle
-
+from datetime import datetime, timedelta
 
 Session(app)
 scaler = pickle.load(open("./scaler.pkl", 'rb'))
 model = pickle.load(open("./model.pkl", 'rb'))
+
+
 
 def required_admin(f):
     @wraps(f)
@@ -102,9 +104,9 @@ def log_admin():
         return jsonify({'message':'this is admin\'s login'})
     elif request.method=='POST':
         data=request.json
-        username=data.get('username')
+        email=data.get('email')
         password=data.get('password')
-        adminn=admin.query.filter_by(username=username).first()
+        adminn=admin.query.filter_by(email=email).first()
         if adminn and adminn.check_password(password):
             session['admin_id']=adminn.id
             return jsonify({'message': 'Login successful'}), 200
@@ -206,9 +208,28 @@ def logout_student():
         return jsonify({'message':'student logged out'})
     return jsonify({'message':'No student is logged in!'})       
 
+career_tips = {
+    'Droit': 'Stay updated with recent laws and regulations. Practice mock trials.',
+    'Médecine': 'Focus on biology and chemistry. Gain hands-on experience through internships.',
+    'Sciences politiques': 'Engage in debates and learn about international relations.',
+    'Beaux-arts': 'Build a strong portfolio and participate in exhibitions.',
+    'Informatique': 'Learn programming languages and contribute to open-source projects.',
+    'Éducation': 'Enhance communication skills and focus on pedagogy.',
+    'Entrepreneuriat': 'Develop business plans and learn about market analysis.',
+    'Recherche scientifique': 'Focus on critical thinking and research methodologies.',
+    'Finance': 'Stay updated with economic trends. Learn about trading and investments.',
+    'Littérature': 'Read extensively and improve writing skills.',
+    'Comptabilité': 'Learn financial regulations and master accounting software.',
+    'Design': 'Work on creative projects and learn graphic design tools.',
+    'Génie civil': 'Strengthen knowledge in physics and construction materials.',
+    'Développement de jeux': 'Master game engines like Unity or Unreal Engine.',
+    'Économie et marchés financiers': 'Understand market trends and build analytical skills.',
+    'Immobilier': 'Understand market trends and build strong networking skills.',
+    'Non spécifié': 'Explore different fields and identify your interests.'
+}
 
 @app.route('/admin/score/add/<int:student_id>', methods=['POST'])
-@required_admin  # Ensure only the admin can access this route
+@required_admin  
 def admin_add_score(student_id):
     try:
         student = Student.query.get(student_id)
@@ -230,32 +251,28 @@ def admin_add_score(student_id):
        
         weekly_self_study_hours = data.get('weekly_self_study_hours', 0)
 
-        # Calculate total and average score (we'll only use this for saving in the database)
         total_score = sum([math_score, history_score, physics_score, chemistry_score, biology_score, english_score, geography_score])
         average_score = total_score / 7
 
         # Prepare the input for the model (without total_score and average_score)
         input_features = np.array([[
-            absence_days,                                  # Absence days
-            weekly_self_study_hours,                       # Weekly self-study hours
-            math_score, history_score, physics_score,      # Academic scores
+            absence_days,                                  
+            weekly_self_study_hours,                      
+            math_score, history_score, physics_score,      
             chemistry_score, biology_score, english_score, 
             geography_score  ,total_score,   average_score                         
         ]])
-    # Print the input features and their shape to debug
+    
         print("Input Features:", input_features)
         print("Shape of Input Features:", input_features.shape)
         # Scale the input and make a prediction
-        scaled_features = scaler.transform(input_features)  # Ensure this matches the scaler's training data
+        scaled_features = scaler.transform(input_features)  
         recommendation = model.predict(scaled_features)[0]
 
         print(f"Model raw prediction: {recommendation}")
        
 
-# Ensure recommendation is an integer
         recommendation = int(recommendation)
-
-# Debugging
         print(f"Model casted prediction (as int): {recommendation}")
         # Map the numeric recommendation to a descriptive text
         career_inspiration_map = {
@@ -293,7 +310,30 @@ def admin_add_score(student_id):
         # Add to the database and commit
         db.session.add(new_score)
         db.session.commit()
+        
+         # Get tips specific to the recommendation
+        path_tips = career_tips.get(recommendation_text, "Explore and learn more about this path.")
 
+        # Create notifications for the student
+        notifications = [
+            Notification(
+                student_id=student.id,
+                title="New Path Recommendation",
+                message=f"We recommend you follow the {recommendation_text} path based on your scores.",
+                timestamp=datetime.utcnow(),
+                read=False
+            ),
+            Notification(
+                student_id=student.id,
+                title=f"Tips for {recommendation_text}",
+                message=path_tips,
+                timestamp=datetime.utcnow() + timedelta(days=1),  # Send this notification the next day
+                read=False
+            )
+        ]
+
+        db.session.add_all(notifications)
+        db.session.commit()
         return jsonify({
             "message": "Score and additional features added successfully",
             "average score": average_score,

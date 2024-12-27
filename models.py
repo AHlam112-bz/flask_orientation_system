@@ -80,10 +80,10 @@ scores_schema = ScoreSchema(many=True)
 
 class admin(db.Model):
     id=db.Column(db.Integer,primary_key=True)
-    username = db.Column(db.String(20), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(128), nullable=False)
-    def __init__(self,username,password):
-        self.username=username
+    def __init__(self,email,password):
+        self.email=email
         self.password=generate_password_hash(password)
     def check_password(self,password):
         return check_password_hash(self.password,password)
@@ -95,6 +95,16 @@ class AdminSchema(ma.SQLAlchemyAutoSchema):
 admin_schema=AdminSchema()
 admins_schema=AdminSchema(many=True)
 
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    read = db.Column(db.Boolean, default=False)
+
+    student = db.relationship('Student', backref=db.backref('notifications', lazy=True))
+
 
 
 with app.app_context():
@@ -102,10 +112,10 @@ with app.app_context():
     print("Database created !!!")
     
 with app.app_context():
-    if admin.query.filter_by(username='admin_user').first() :
+    if admin.query.filter_by(email='admin@uiz.ac.ma').first() :
         print("Admin user already exists")
     else:
-        new_admin = admin(username='admin_user', password='admin_pass')
+        new_admin = admin(email='admin@uiz.ac.ma', password='admin_pass')
         db.session.add(new_admin)
         db.session.commit()
         print('user created !!!!')
