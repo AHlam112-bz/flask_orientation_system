@@ -344,6 +344,128 @@ def admin_add_score(student_id):
     except TypeError as e:
         return jsonify({"error": f"Invalid data: {str(e)}"}), 400
 
+
+
+@app.route('/student/addd', methods=['POST'])
+@required_admin
+def add_student_with_scores():
+    try:
+        data = request.get_json()
+        name = data.get('name')
+        gender = data.get('gender')
+        scores = data.get('scores') 
+        if not all([name, gender]):
+            return jsonify({'message': 'Name and gender are required'}), 400
+        # Generate the apogee number
+        last_student = Student.query.order_by(Student.apogee.desc()).first()
+        apogee = last_student.apogee + 1 if last_student else 1001  # Start from 1001 if no students exist
+        apogee_suffix = f"{apogee % 100:02}"
+        # Generate the email based on the name and apogee
+        email = f"{name.lower().replace(' ', '.')}.{apogee_suffix}@edu.uiz.ac.ma"
+
+        # Check if email already exists (unlikely, but for safety)
+        if Student.query.filter_by(email=email).first():
+            return jsonify({'message': 'Generated email already exists, please modify the student name.'}), 400
+        apogee_part=str(apogee)
+        password=f"{name.lower().replace(' ', '')}.{apogee_part}"
+        # Create a new student
+        new_student = Student(name=name, email=email, apogee=apogee, gender=gender,password=password)
+        db.session.add(new_student)
+        db.session.commit()
+
+        # Add scores
+        math_score = scores.get('math_score')
+        history_score = scores.get('history_score')
+        physics_score = scores.get('physics_score')
+        chemistry_score = scores.get('chemistry_score')
+        biology_score = scores.get('biology_score')
+        english_score = scores.get('english_score')
+        geography_score = scores.get('geography_score')
+        absence_days = scores.get('absence_days', 0)
+        weekly_self_study_hours = scores.get('weekly_self_study_hours', 0)
+
+        if not all([math_score, history_score, physics_score, chemistry_score, biology_score, english_score, geography_score]):
+            return jsonify({'message': 'All scores are required'}), 400
+
+        total_score = sum([math_score, history_score, physics_score, chemistry_score, biology_score, english_score, geography_score])
+        average_score = total_score / 7
+
+        # Prepare recommendation logic
+        input_features = np.array([[absence_days, weekly_self_study_hours, math_score, history_score, physics_score,
+                                     chemistry_score, biology_score, english_score, geography_score, total_score, average_score]])
+        scaled_features = scaler.transform(input_features)
+        recommendation = int(model.predict(scaled_features)[0])
+        
+        career_inspiration_map = {
+            0: 'Droit', 1: 'Médecine', 2: 'Sciences politiques', 3: 'Beaux-arts',
+            4: 'Informatique', 5: 'Non spécifié', 6: 'Éducation', 7: 'Entrepreneuriat',
+            8: 'Recherche scientifique', 9: 'Finance', 10: 'Littérature',
+            11: 'Comptabilité', 12: 'Design', 13: 'Génie civil',
+            14: 'Développement de jeux', 15: 'Économie et marchés financiers',
+            16: 'Immobilier'
+        }
+        recommendation_text = career_inspiration_map.get(recommendation, "Unknown Recommendation")
+
+        # Add score record
+        new_score = Score(
+            student_id=new_student.id,
+            math_score=math_score,
+            history_score=history_score,
+            physics_score=physics_score,
+            chemistry_score=chemistry_score,
+            biology_score=biology_score,
+            english_score=english_score,
+            geography_score=geography_score,
+            total_score=total_score,
+            average_score=average_score,
+            absence_days=absence_days,
+            weekly_self_study_hours=weekly_self_study_hours,
+            recommendation=recommendation_text
+        )
+        db.session.add(new_score)
+        db.session.commit()
+
+        # Create notifications for the student
+        path_tips = career_tips.get(recommendation_text, "Explore and learn more about this path.")
+        notifications = [
+            Notification(
+                student_id=new_student.id,
+                title="New Path Recommendation",
+                message=f"We recommend you follow the {recommendation_text} path based on your scores.",
+                timestamp=datetime.utcnow(),
+                read=False
+            ),
+            Notification(
+                student_id=new_student.id,
+                title=f"Tips for {recommendation_text}",
+                message=path_tips,
+                timestamp=datetime.utcnow() + timedelta(days=1),
+                read=False
+            )
+        ]
+        db.session.add_all(notifications)
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Student and scores added successfully!',
+            'student': {
+                'id': new_student.id,
+                'name': new_student.name,
+                'email': new_student.email,
+                'apogee': new_student.apogee,
+                'gender': new_student.gender
+            },
+            'scores': {
+                'total_score': total_score,
+                'average_score': average_score,
+                'recommendation': recommendation_text
+            }
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error occurred: {str(e)}'}), 500
+
     
 @app.route('/student/scores/<int:student_id>', methods=['GET'])
 def get_student_scores(student_id):

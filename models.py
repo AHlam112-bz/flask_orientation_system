@@ -45,7 +45,7 @@ class Report(db.Model):
 
 class Student(db.Model):
     id=db.Column(db.Integer,primary_key=True)
-    name=db.Column(db.String(20),nullable=False)
+    name=db.Column(db.String(20),unique=True,nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     apogee=db.Column(db.Integer,unique=True,nullable=False)
     gender = db.Column(db.String(10), nullable=True)
