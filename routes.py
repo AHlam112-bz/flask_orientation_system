@@ -7,6 +7,7 @@ from flask_session import Session
 import numpy as np
 import pickle
 from datetime import datetime, timedelta
+from desc_path import path_schedules,career_tips
 
 Session(app)
 scaler = pickle.load(open("./scaler.pkl", 'rb'))
@@ -22,6 +23,16 @@ def required_admin(f):
             return jsonify({'message':'access impossible !!!!!'}),401
         return f(*args,**kwargs)
     return decorator
+
+def required_student(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'student_id' not in session:
+            return jsonify({'message':'access impossible !!!!!'}),401
+        return f(*args,**kwargs)
+    
+    return decorated_function
+
 
 @app.route('/student/add', methods=['POST'])
 @required_admin
@@ -208,25 +219,7 @@ def logout_student():
         return jsonify({'message':'student logged out'})
     return jsonify({'message':'No student is logged in!'})       
 
-career_tips = {
-    'Droit': 'Stay updated with recent laws and regulations. Practice mock trials.',
-    'Médecine': 'Focus on biology and chemistry. Gain hands-on experience through internships.',
-    'Sciences politiques': 'Engage in debates and learn about international relations.',
-    'Beaux-arts': 'Build a strong portfolio and participate in exhibitions.',
-    'Informatique': 'Learn programming languages and contribute to open-source projects.',
-    'Éducation': 'Enhance communication skills and focus on pedagogy.',
-    'Entrepreneuriat': 'Develop business plans and learn about market analysis.',
-    'Recherche scientifique': 'Focus on critical thinking and research methodologies.',
-    'Finance': 'Stay updated with economic trends. Learn about trading and investments.',
-    'Littérature': 'Read extensively and improve writing skills.',
-    'Comptabilité': 'Learn financial regulations and master accounting software.',
-    'Design': 'Work on creative projects and learn graphic design tools.',
-    'Génie civil': 'Strengthen knowledge in physics and construction materials.',
-    'Développement de jeux': 'Master game engines like Unity or Unreal Engine.',
-    'Économie et marchés financiers': 'Understand market trends and build analytical skills.',
-    'Immobilier': 'Understand market trends and build strong networking skills.',
-    'Non spécifié': 'Explore different fields and identify your interests.'
-}
+
 
 @app.route('/admin/score/add/<int:student_id>', methods=['POST'])
 @required_admin  
@@ -466,8 +459,36 @@ def add_student_with_scores():
         db.session.rollback()
         return jsonify({'message': f'Error occurred: {str(e)}'}), 500
 
-    
+
+@app.route('/student/path-schedule/<int:student_id>', methods=['GET'])
+@required_student
+def get_path_schedule(student_id):
+    try:
+        # Fetch the student's latest score and recommendation
+        score = Score.query.filter_by(student_id=student_id).order_by(Score.id.desc()).first()
+        if not score:
+            return jsonify({'message': 'No scores found for this student.'}), 404
+
+        recommendation = score.recommendation
+        if recommendation not in path_schedules:
+            return jsonify({'message': 'Details for the recommended path are not available.'}), 404
+
+        # Retrieve the details for the recommended path
+        details = path_schedules[recommendation]
+
+        return jsonify({
+            'path': recommendation,
+            'description': details['description'],
+            'schedule': details['schedule']
+        }), 200
+
+    except Exception as e:
+        return jsonify({'message': f'Error occurred: {str(e)}'}), 500
+
+ 
+ 
 @app.route('/student/scores/<int:student_id>', methods=['GET'])
+
 def get_student_scores(student_id):
     student = Student.query.get(student_id)
     if not student:
@@ -519,6 +540,7 @@ def report_score():
 from datetime import datetime
 
 @app.route('/admin/reports', methods=['GET'])
+
 def get_reports():
     reports = Report.query.all()  # Assuming you're fetching reports
     reports_data = []
