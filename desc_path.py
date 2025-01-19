@@ -1,3 +1,13 @@
+career_inspiration_map = {
+    0: 'Droit', 1: 'Médecine', 2: 'Sciences politiques', 3: 'Beaux-arts',
+    4: 'Informatique', 5: 'Psychology', 6: 'Éducation', 7: 'Entrepreneuriat',
+    8: 'Recherche scientifique', 9: 'Finance', 10: 'Littérature',
+    11: 'Comptabilité', 12: 'Design', 13: 'Génie civil',
+    14: 'Développement de jeux', 15: 'Économie et marchés financiers',
+    16: 'Immobilier'
+}
+
+
 career_tips = {
     'Droit': 'Stay updated with recent laws and regulations. Practice mock trials.',
     'Médecine': 'Focus on biology and chemistry. Gain hands-on experience through internships.',
@@ -14,8 +24,7 @@ career_tips = {
     'Génie civil': 'Strengthen knowledge in physics and construction materials.',
     'Développement de jeux': 'Master game engines like Unity or Unreal Engine.',
     'Économie et marchés financiers': 'Understand market trends and build analytical skills.',
-    'Immobilier': 'Understand market trends and build strong networking skills.',
-    'Non spécifié': 'Explore different fields and identify your interests.'
+    'Immobilier': 'Understand market trends and build strong networking skills.'
 }
 
 

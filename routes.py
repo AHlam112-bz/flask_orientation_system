@@ -7,11 +7,11 @@ from flask_session import Session
 import numpy as np
 import pickle
 from datetime import datetime, timedelta
-from desc_path import path_schedules,career_tips
-
+from desc_path import path_schedules,career_tips,career_inspiration_map
+import traceback
 Session(app)
-scaler = pickle.load(open("./scaler.pkl", 'rb'))
-model = pickle.load(open("./model.pkl", 'rb'))
+scaler = pickle.load(open("./scaler_final.pkl", 'rb'))
+model = pickle.load(open("./model_final.pkl", 'rb'))
 
 
 
@@ -86,7 +86,6 @@ def get_students():
     for student in all_students:
        
         score = student.scores
-        absence_days = score.absence_days if score and score.absence_days is not None else 0
         recommendation = score.recommendation if score and score.recommendation else "No departement available"
 
         result.append({
@@ -96,7 +95,6 @@ def get_students():
             "apogee": student.apogee,
             "gender": student.gender,
             "password":student.password,
-            "absence_days": absence_days,
             "departement": recommendation,
         })
 
@@ -221,122 +219,146 @@ def logout_student():
 
 
 
-@app.route('/admin/score/add/<int:student_id>', methods=['POST'])
-@required_admin  
-def admin_add_score(student_id):
-    try:
-        student = Student.query.get(student_id)
-        if not student:
-            return jsonify({"message": "Student not found"}), 404
-
-        data = request.get_json()
+#@app.route('/admin/score/add/<int:student_id>', methods=['POST'])
+#@required_admin  
+#def admin_add_score(student_id):
+#    try:
+  #      student = Student.query.get(student_id)
+ #       if not student:
+   #         return jsonify({"message": "Student not found"}), 404
+#
+ #       data = request.get_json()
 
         # Retrieve and validate the academic scores and features
-        math_score = data.get('math_score')
-        history_score = data.get('history_score')
-        physics_score = data.get('physics_score')
-        chemistry_score = data.get('chemistry_score')
-        biology_score = data.get('biology_score')
-        english_score = data.get('english_score')
-        geography_score = data.get('geography_score')
+  #      math_score = data.get('math_score')
+   #     history_score = data.get('history_score')
+    #    physics_score = data.get('physics_score')
+     #   chemistry_score = data.get('chemistry_score')
+      #  biology_score = data.get('biology_score')
+       # english_score = data.get('english_score')
+     #   geography_score = data.get('geography_score')
         
-        absence_days = data.get('absence_days', 0)
+      #  absence_days = data.get('absence_days', 0)
        
-        weekly_self_study_hours = data.get('weekly_self_study_hours', 0)
+       # weekly_self_study_hours = data.get('weekly_self_study_hours', 0)
 
-        total_score = sum([math_score, history_score, physics_score, chemistry_score, biology_score, english_score, geography_score])
-        average_score = total_score / 7
+      #  total_score = sum([math_score, history_score, physics_score, chemistry_score, biology_score, english_score, geography_score])
+       # average_score = total_score / 7
 
         # Prepare the input for the model (without total_score and average_score)
-        input_features = np.array([[
-            absence_days,                                  
-            weekly_self_study_hours,                      
-            math_score, history_score, physics_score,      
-            chemistry_score, biology_score, english_score, 
-            geography_score  ,total_score,   average_score                         
-        ]])
+      #  input_features = np.array([[
+       #     absence_days,                                  
+       #     weekly_self_study_hours,                      
+      #      math_score, history_score, physics_score,      
+      #      chemistry_score, biology_score, english_score, 
+      #      geography_score  ,total_score,   average_score                         
+      #  ]])
     
-        print("Input Features:", input_features)
-        print("Shape of Input Features:", input_features.shape)
+      #  print("Input Features:", input_features)
+     #  print("Shape of Input Features:", input_features.shape)
         # Scale the input and make a prediction
-        scaled_features = scaler.transform(input_features)  
-        recommendation = model.predict(scaled_features)[0]
+    #    scaled_features = scaler.transform(input_features)  
+     #   recommendation = model.predict(scaled_features)[0]
 
-        print(f"Model raw prediction: {recommendation}")
+      #  print(f"Model raw prediction: {recommendation}")
        
 
-        recommendation = int(recommendation)
-        print(f"Model casted prediction (as int): {recommendation}")
+       # recommendation = int(recommendation)
+     #   print(f"Model casted prediction (as int): {recommendation}")
         # Map the numeric recommendation to a descriptive text
-        career_inspiration_map = {
-    0: 'Droit', 1: 'Médecine', 2: 'Sciences politiques', 3: 'Beaux-arts',
-    4: 'Informatique', 5: 'Non spécifié', 6: 'Éducation', 7: 'Entrepreneuriat',
-    8: 'Recherche scientifique', 9: 'Finance', 10: 'Littérature',
-    11: 'Comptabilité', 12: 'Design', 13: 'Génie civil',
-    14: 'Développement de jeux', 15: 'Économie et marchés financiers',
-    16: 'Immobilier'
-}
-        print(f"Keys in career_aspiration_map: {career_inspiration_map.keys()}")
+     #   career_inspiration_map = {
+   # 0: 'Droit', 1: 'Médecine', 2: 'Sciences politiques', 3: 'Beaux-arts',
+  #  4: 'Informatique', 5: 'Non spécifié', 6: 'Éducation', 7: 'Entrepreneuriat',
+   # 8: 'Recherche scientifique', 9: 'Finance', 10: 'Littérature',
+   # 11: 'Comptabilité', 12: 'Design', 13: 'Génie civil',
+   # 14: 'Développement de jeux', 15: 'Économie et marchés financiers',
+  #  16: 'Immobilier'
+#}
+     #   print(f"Keys in career_aspiration_map: {career_inspiration_map.keys()}")
 
         # Map the numeric recommendation to a descriptive text
-        recommendation_text = career_inspiration_map.get(recommendation, f"Unknown Recommendation ({recommendation})")
+      #  recommendation_text = career_inspiration_map.get(recommendation, f"Unknown Recommendation ({recommendation})")
 
-        print(f"Mapped recommendation: {recommendation_text}")
-        # Create new Score record
-        new_score = Score(
-            student_id=student.id,
-            math_score=math_score,
-            history_score=history_score,
-            physics_score=physics_score,
-            chemistry_score=chemistry_score,
-            biology_score=biology_score,
-            english_score=english_score,
-            geography_score=geography_score,
-            total_score=total_score,
-            average_score=average_score,
-            absence_days=absence_days,
+       # print(f"Mapped recommendation: {recommendation_text}")
+     #   # Create new Score record
+      #  new_score = Score(
+       #     student_id=student.id,
+        #    math_score=math_score,
+         #   history_score=history_score,
+          #  physics_score=physics_score,
+           # chemistry_score=chemistry_score,
+            #biology_score=biology_score,
+           # english_score=english_score,
+       #     geography_score=geography_score,
+        #    total_score=total_score,
+         #   average_score=average_score,
+          #  absence_days=absence_days,
            
-            weekly_self_study_hours=weekly_self_study_hours,
-            recommendation=recommendation_text
-        )
+           # weekly_self_study_hours=weekly_self_study_hours,
+            #recommendation=recommendation_text
+     #   )
 
         # Add to the database and commit
-        db.session.add(new_score)
-        db.session.commit()
+   #     db.session.add(new_score)
+     #   db.session.commit()
         
          # Get tips specific to the recommendation
-        path_tips = career_tips.get(recommendation_text, "Explore and learn more about this path.")
+      #  path_tips = career_tips.get(recommendation_text, "Explore and learn more about this path.")
 
         # Create notifications for the student
-        notifications = [
-            Notification(
-                student_id=student.id,
-                title="New Path Recommendation",
-                message=f"We recommend you follow the {recommendation_text} path based on your scores.",
-                timestamp=datetime.utcnow(),
-                read=False
-            ),
-            Notification(
-                student_id=student.id,
-                title=f"Tips for {recommendation_text}",
-                message=path_tips,
-                timestamp=datetime.utcnow() + timedelta(days=1),  # Send this notification the next day
-                read=False
-            )
-        ]
+       # notifications = [
+        #    Notification(
+         #       student_id=student.id,
+          #      title="New Path Recommendation",
+           #     message=f"We recommend you follow the {recommendation_text} path based on your scores.",
+            #    timestamp=datetime.utcnow(),
+          #      read=False
+           # ),
+          #  Notification(
+          #      student_id=student.id,
+          #      title=f"Tips for {recommendation_text}",
+         #       message=path_tips,
+         #       timestamp=datetime.utcnow() + timedelta(days=1),  # Send this notification the next day
+         #       read=False
+      #      )
+     #   ]
 
-        db.session.add_all(notifications)
-        db.session.commit()
-        return jsonify({
-            "message": "Score and additional features added successfully",
-            "average score": average_score,
-            "total score":total_score,
-            "recommendation": recommendation_text
-        }), 201
+     #   db.session.add_all(notifications)
+     #   db.session.commit()
+     #   return jsonify({
+     #       "message": "Score and additional features added successfully",
+     #       "average score": average_score,
+      #      "total score":total_score,
+   #         "recommendation": recommendation_text
+  #      }), 201
 
-    except TypeError as e:
-        return jsonify({"error": f"Invalid data: {str(e)}"}), 400
+   # except TypeError as e:
+     #   return jsonify({"error": f"Invalid data: {str(e)}"}), 400
 
+def Recommendations(weekly_self_study_hours, math_score, history_score, physics_score,
+                     chemistry_score, biology_score, english_score, geography_score,
+                     total_score, average_score):
+    # Create feature array
+    feature_array = np.array([[weekly_self_study_hours, math_score, history_score, physics_score,
+                               chemistry_score, biology_score, english_score, geography_score, total_score, average_score]])
+    
+    # Scale features
+    scaled_features = scaler.transform(feature_array)
+    
+    # Predict using the model
+    probabilities = model.predict_proba(scaled_features)
+    
+    # Get top 3 predicted classes along with their probabilities
+    top_classes_idx = np.argsort(-probabilities[0])[:3]  # Top 3 classes
+    print(f"Predicted indices: {top_classes_idx}")  # Debugging
+    
+    top_classes_names_probs = [
+    (career_inspiration_map.get(idx, f"Unknown Recommendation (Index: {idx})"), probabilities[0][idx])
+    for idx in top_classes_idx
+]
+
+    
+    return top_classes_names_probs
 
 
 @app.route('/student/addd', methods=['POST'])
@@ -354,7 +376,7 @@ def add_student_with_scores():
         apogee = last_student.apogee + 1 if last_student else 1001  # Start from 1001 if no students exist
         apogee_suffix = f"{apogee % 100:02}"
         # Generate the email based on the name and apogee
-        email = f"{name.lower().replace(' ', '.')}.{apogee_suffix}@edu.uiz.ac.ma"
+        email = f"{name.lower().replace(' ', '')}.{apogee_suffix}@edu.uiz.ac.ma"
 
         # Check if email already exists (unlikely, but for safety)
         if Student.query.filter_by(email=email).first():
@@ -362,7 +384,7 @@ def add_student_with_scores():
         apogee_part=str(apogee)
         password=f"{name.lower().replace(' ', '')}.{apogee_part}"
         # Create a new student
-        new_student = Student(name=name, email=email, apogee=apogee, gender=gender,password=password)
+        new_student = Student(name=name, email=email, apogee=apogee, gender=gender, password=password)
         db.session.add(new_student)
         db.session.commit()
 
@@ -374,7 +396,6 @@ def add_student_with_scores():
         biology_score = scores.get('biology_score')
         english_score = scores.get('english_score')
         geography_score = scores.get('geography_score')
-        absence_days = scores.get('absence_days', 0)
         weekly_self_study_hours = scores.get('weekly_self_study_hours', 0)
 
         if not all([math_score, history_score, physics_score, chemistry_score, biology_score, english_score, geography_score]):
@@ -383,21 +404,13 @@ def add_student_with_scores():
         total_score = sum([math_score, history_score, physics_score, chemistry_score, biology_score, english_score, geography_score])
         average_score = total_score / 7
 
-        # Prepare recommendation logic
-        input_features = np.array([[absence_days, weekly_self_study_hours, math_score, history_score, physics_score,
-                                     chemistry_score, biology_score, english_score, geography_score, total_score, average_score]])
-        scaled_features = scaler.transform(input_features)
-        recommendation = int(model.predict(scaled_features)[0])
-        
-        career_inspiration_map = {
-            0: 'Droit', 1: 'Médecine', 2: 'Sciences politiques', 3: 'Beaux-arts',
-            4: 'Informatique', 5: 'Non spécifié', 6: 'Éducation', 7: 'Entrepreneuriat',
-            8: 'Recherche scientifique', 9: 'Finance', 10: 'Littérature',
-            11: 'Comptabilité', 12: 'Design', 13: 'Génie civil',
-            14: 'Développement de jeux', 15: 'Économie et marchés financiers',
-            16: 'Immobilier'
-        }
-        recommendation_text = career_inspiration_map.get(recommendation, "Unknown Recommendation")
+        # Get top 3 recommendations
+        recommendations = Recommendations(weekly_self_study_hours, math_score, history_score, physics_score,
+                                          chemistry_score, biology_score, english_score, geography_score,
+                                          total_score, average_score)
+
+        # Prepare the response data
+        recommendation_texts = [(class_name, prob) for class_name, prob in recommendations[:3]]
 
         # Add score record
         new_score = Score(
@@ -411,26 +424,25 @@ def add_student_with_scores():
             geography_score=geography_score,
             total_score=total_score,
             average_score=average_score,
-            absence_days=absence_days,
             weekly_self_study_hours=weekly_self_study_hours,
-            recommendation=recommendation_text
+            recommendation=', '.join([rec[0] for rec in recommendation_texts])
         )
         db.session.add(new_score)
         db.session.commit()
 
         # Create notifications for the student
-        path_tips = career_tips.get(recommendation_text, "Explore and learn more about this path.")
+        path_tips = career_tips.get(recommendation_texts[0][0], "Explore and learn more about this path.")
         notifications = [
             Notification(
                 student_id=new_student.id,
-                title="New Path Recommendation",
-                message=f"We recommend you follow the {recommendation_text} path based on your scores.",
+                title="New Path Recommendations",
+                message=f"We recommend you follow the following paths based on your scores: {', '.join([rec[0] for rec in recommendation_texts])}.",
                 timestamp=datetime.utcnow(),
                 read=False
             ),
             Notification(
                 student_id=new_student.id,
-                title=f"Tips for {recommendation_text}",
+                title=f"Tips for {recommendation_texts[0][0]}",
                 message=path_tips,
                 timestamp=datetime.utcnow() + timedelta(days=1),
                 read=False
@@ -451,37 +463,80 @@ def add_student_with_scores():
             'scores': {
                 'total_score': total_score,
                 'average_score': average_score,
-                'recommendation': recommendation_text
+                'recommendations': recommendation_texts
             }
         }), 201
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'message': f'Error occurred: {str(e)}'}), 500
-
+        error_message = str(e)
+        traceback_details = traceback.format_exc()  # Get detailed traceback
+        print(f"Error occurred: {error_message}")
+        print(f"Traceback: {traceback_details}")  # This will show you where the error occurred
+    return jsonify({'message': f'Error occurred: {error_message}'}), 500
 
 @app.route('/student/path-schedule/<int:student_id>', methods=['GET'])
 @required_student
 def get_path_schedule(student_id):
     try:
-        # Fetch the student's latest score and recommendation
+        # Fetch the student's latest score and recommendation(s)
         score = Score.query.filter_by(student_id=student_id).order_by(Score.id.desc()).first()
         if not score:
             return jsonify({'message': 'No scores found for this student.'}), 404
 
-        recommendation = score.recommendation
-        if recommendation not in path_schedules:
-            return jsonify({'message': 'Details for the recommended path are not available.'}), 404
+        # Assuming score.recommendation now holds a list of top recommendations
+        recommendations = score.recommendation
+        if not isinstance(recommendations, list):  # Ensure it's a list
+            recommendations = recommendations.split(', ')  # Split by ', ' if it's a string
 
-        # Retrieve the details for the recommended path
-        details = path_schedules[recommendation]
+        # Fetch details for each recommendation
+        path_details = []
+        for recommendation in recommendations:
+            if recommendation not in path_schedules:
+                path_details.append({'path': recommendation, 'message': 'Details not available'})
+            else:
+                details = path_schedules[recommendation]
+                path_details.append({
+                    'path': recommendation,
+                    'description': details['description'],
+                    'schedule': details['schedule']
+                })
 
-        return jsonify({
-            'path': recommendation,
-            'description': details['description'],
-            'schedule': details['schedule']
-        }), 200
+        return jsonify({'recommended_paths': path_details}), 200
 
+    except Exception as e:
+        return jsonify({'message': f'Error occurred: {str(e)}'}), 500
+
+@app.route('/student/notifications/<int:student_id>', methods=['GET'])
+@required_student
+def get_notifications(student_id):
+    try:
+        # Fetch notifications for the student
+        notifications = Notification.query.filter_by(student_id=student_id).order_by(Notification.timestamp.desc()).all()
+        
+        if not notifications:
+            return jsonify({'message': 'No notifications found for this student.'}), 404
+        
+        # Update notifications to mark them as read
+        for notification in notifications:
+            if not notification.read:
+                notification.read = True
+        db.session.commit()  # Commit the changes to the database
+        
+        # Prepare notification data for the response
+        notification_data = [
+            {
+                'id': notification.id,
+                'title': notification.title,
+                'message': notification.message,
+                'timestamp': notification.timestamp,
+                'read': notification.read
+            }
+            for notification in notifications
+        ]
+        
+        return jsonify({'notifications': notification_data}), 200
+    
     except Exception as e:
         return jsonify({'message': f'Error occurred: {str(e)}'}), 500
 

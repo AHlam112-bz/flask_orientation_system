@@ -20,13 +20,11 @@ class Score(db.Model):
     total_score = db.Column(db.Float, nullable=True)
     average_score = db.Column(db.Float, nullable=True)
     
-    
-    absence_days = db.Column(db.Integer, nullable=True)
    
     weekly_self_study_hours = db.Column(db.Float, nullable=True)
     
     # ML Model Recommendation
-    recommendation = db.Column(db.String(255), nullable=True)
+    recommendation = db.Column(db.JSON, nullable=True)
   
 
 
